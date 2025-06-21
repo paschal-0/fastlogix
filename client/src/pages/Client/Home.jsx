@@ -157,7 +157,7 @@ export default function Home() {
           className="mb-4"
         >
           <h2 style={{ fontSize: "48px", fontWeight: "bold", color: "#007bff" }}>
-            <CountUp end={stat.end} duration={2} />
+            <CountUp end={stat.end} duration={5} />
           </h2>
           <p>{stat.label}</p>
         </motion.div>

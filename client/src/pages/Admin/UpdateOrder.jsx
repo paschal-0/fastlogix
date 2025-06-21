@@ -10,12 +10,13 @@ const UpdateOrder = () => {
   const { id } = useParams();
   const navigate = useNavigate();
 
+  // ✅ SAFER default: no undefined nested keys
   const [formData, setFormData] = useState({
     sender: { name: '', email: '', address: '' },
     receiver: { name: '', email: '', address: '' },
     packageDetails: { description: '', weight: '', value: '' },
     status: '',
-    location: '',
+    location: ''
   });
 
   const [manualOrderId, setManualOrderId] = useState('');
@@ -29,7 +30,17 @@ const UpdateOrder = () => {
     const fetchOrder = async () => {
       try {
         const res = await axios.get(`/api/orders/${id}`);
-        setFormData(res.data);
+        const data = res.data;
+
+        // ✅ MERGE WITH SAFE DEFAULTS
+        setFormData({
+          sender: data.sender || { name: '', email: '', address: '' },
+          receiver: data.receiver || { name: '', email: '', address: '' },
+          packageDetails: data.packageDetails || { description: '', weight: '', value: '' },
+          status: data.status || '',
+          location: data.location?.address || ''
+        });
+
       } catch (error) {
         toast.error('❌ Failed to fetch order.');
       } finally {
@@ -40,13 +51,17 @@ const UpdateOrder = () => {
   }, [id]);
 
   const handleInputChange = (section, field, value) => {
-    setFormData(prev => ({
-      ...prev,
-      [section]: {
-        ...prev[section],
-        [field]: value,
-      },
-    }));
+    if (section === 'location') {
+      setFormData(prev => ({ ...prev, location: value }));
+    } else {
+      setFormData(prev => ({
+        ...prev,
+        [section]: {
+          ...prev[section],
+          [field]: value,
+        },
+      }));
+    }
   };
 
   const handleSubmit = async (e) => {
@@ -269,7 +284,7 @@ const UpdateOrder = () => {
                     <Form.Control
                       type="text"
                       value={formData.location}
-                      onChange={(e) => setFormData({ ...formData, location: e.target.value })}
+                      onChange={(e) => handleInputChange('location', null, e.target.value)}
                     />
                   </Form.Group>
                   <Button
