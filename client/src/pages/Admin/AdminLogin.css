@@ -1,0 +1,44 @@
+/* client/src/pages/Admin/AdminLogin.css */
+
+.admin-login-container {
+  background: rgba(255, 255, 255, 0.0);  /* semi-transparent white */
+  backdrop-filter: blur(0px);            /* optional: add a glass effect */
+  padding: 40px 30px;
+  border-radius: 12px;
+  box-shadow: 0 8px 25px rgba(0, 0, 0, 0.1);
+  color: #fff;                            /* makes text visible on dark bg */
+}
+
+.admin-login-container h2 {
+  margin-bottom: 20px;
+  font-weight: 700;
+}
+
+.admin-login-container label {
+  display: block;
+  margin: 10px 0 5px;
+}
+
+.admin-login-container input {
+  padding: 12px 15px;
+  width: 100%;
+  border: none;
+  border-radius: 8px;
+  margin-bottom: 15px;
+}
+
+.admin-login-container button {
+  padding: 12px 30px;
+  background: #007bff;
+  color: #fff;
+  border: none;
+  border-radius: 8px;
+  font-weight: 600;
+  cursor: pointer;
+  transition: background 0.3s, transform 0.2s;
+}
+
+.admin-login-container button:hover {
+  background: #0056b3;
+  transform: translateY(-2px);
+}

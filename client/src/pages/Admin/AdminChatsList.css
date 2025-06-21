@@ -1,0 +1,70 @@
+/* client/src/pages/Admin/AdminChatsList.css */
+
+.admin-chats-list-page {
+  background: linear-gradient(rgba(7, 7, 7, 0.5), rgba(10, 10, 10, 0.5));
+  background-size: cover;
+  background-position: center;
+  min-height: 100vh;
+  display: flex;
+  justify-content: center;
+  align-items: flex-start;
+  padding: 60px 20px;
+}
+
+.admin-chats-list-container {
+  background: rgba(255, 255, 255, 0.1);
+  backdrop-filter: blur(12px);
+  border-radius: 16px;
+  padding: 40px;
+  width: 100%;
+  max-width: 1000px;
+  box-shadow: 0 8px 30px rgba(0,0,0,0.3);
+  color: #fff;
+}
+
+.admin-chats-list-container h2 {
+  text-align: center;
+  margin-bottom: 30px;
+}
+
+.chats-grid {
+  display: grid;
+  grid-template-columns: repeat(auto-fill, minmax(250px, 1fr));
+  gap: 20px;
+}
+
+.chat-card {
+  background: rgba(255, 255, 255, 0.15);
+  border-radius: 12px;
+  padding: 20px;
+  transition: transform 0.2s ease, box-shadow 0.2s ease;
+}
+
+.chat-card:hover {
+  transform: translateY(-5px);
+  box-shadow: 0 12px 40px rgba(0, 0, 0, 0.2);
+}
+
+.chat-card h3 {
+  margin-top: 0;
+  color: #fff;
+}
+
+.chat-card p {
+  margin: 10px 0;
+}
+
+.chat-card button {
+  padding: 10px 20px;
+  background: #007bff;
+  border: none;
+  border-radius: 8px;
+  color: #fff;
+  font-weight: 600;
+  cursor: pointer;
+  transition: background 0.2s ease;
+}
+
+.chat-card button:hover {
+  background: #0056b3;
+}

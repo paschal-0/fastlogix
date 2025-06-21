@@ -1,0 +1,10 @@
+{
+  "name": "FastLogix Dev",
+  "image": "mcr.microsoft.com/devcontainers/javascript-node:18",
+  "postCreateCommand": "npm install --prefix server && npx create-react-app client",
+  "forwardPorts": [3000, 5000],
+  "portsAttributes": {
+    "3000": { "label": "React App" },
+    "5000": { "label": "API Server" }
+  }
+}
