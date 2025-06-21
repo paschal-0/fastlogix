@@ -22,8 +22,7 @@ export default function Footer() {
           </Col>
           <Col md={4}>
             <h5>Contact Us</h5>
-            <p>Email: info@fastlogix.com</p>
-            <p>Phone: +1 5649</p>
+            <p>Email: info@fastlogix.org</p>
             <div className="d-flex gap-3">
               <a href="https://facebook.com" target="_blank" rel="noreferrer" className="text-light fs-4">
                 <FaFacebookF />
