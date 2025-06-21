@@ -23,7 +23,7 @@ export default function Footer() {
           <Col md={4}>
             <h5>Contact Us</h5>
             <p>Email: info@fastlogix.com</p>
-            <p>Phone: +123 456 7890</p>
+            <p>Phone: +1 5649</p>
             <div className="d-flex gap-3">
               <a href="https://facebook.com" target="_blank" rel="noreferrer" className="text-light fs-4">
                 <FaFacebookF />
@@ -34,7 +34,7 @@ export default function Footer() {
               <a href="https://instagram.com" target="_blank" rel="noreferrer" className="text-light fs-4">
                 <FaInstagram />
               </a>
-              <a href="mailto:info@fastlogix.com" className="text-light fs-4">
+              <a href="mailto:info@fastlogix.org" className="text-light fs-4">
                 <FaEnvelope />
               </a>
             </div>
