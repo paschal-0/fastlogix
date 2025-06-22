@@ -6,9 +6,15 @@ import jwt from 'jsonwebtoken';
 import nodemailer from 'nodemailer';
 import mongoose from 'mongoose';
 import fetch from 'node-fetch'; // ✅ For geocoding
+import cors from 'cors';
 
 const app = express();
-app.use(express.json());
+// Allow only your frontend domain:
+app.use(cors({
+  origin: 'https://www.fastlogix.org',
+  methods: ['GET', 'POST', 'PATCH', 'DELETE', 'PUT'],
+  credentials: true
+}));
 
 const server = http.createServer(app);
 const io = new Server(server, {
@@ -16,6 +22,9 @@ const io = new Server(server, {
     origin: "*"
   }
 });
+
+
+
 
 mongoose.connect('mongodb+srv://paschalokafor450:NvM6LAKinAYYZ3hu@fastlogix.cacgj8m.mongodb.net/fastlogix')
   .then(() => console.log('✅ MongoDB connected to fastlogix DB'))
