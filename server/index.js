@@ -284,6 +284,28 @@ app.get('/api/chat/:orderId', async (req, res) => {
   res.json({ messages });
 });
 
+// Get unique active chats (one per orderId)
+app.get('/api/chats/active', async (req, res) => {
+  try {
+    // Get distinct orderIds from ChatMessages
+    const orderIds = await ChatMessage.distinct('orderId');
+
+    // Fetch Orders for each orderId to get customer name
+    const orders = await Order.find({ orderId: { $in: orderIds } });
+
+    // Merge: [{ orderId, customer }]
+    const activeChats = orders.map(order => ({
+      orderId: order.orderId,
+      customer: order.sender.name || 'Unknown'
+    }));
+
+    res.json(activeChats);
+  } catch (err) {
+    console.error(err);
+    res.status(500).json({ message: 'Failed to get active chats' });
+  }
+});
+
 // ✅ Start server
 const PORT = process.env.PORT || 5000;
 
