@@ -149,7 +149,7 @@ app.post('/api/orders', async (req, res) => {
     });
 
     await transporter.sendMail({
-      from: '"FastLogix" <noreply@fastlogix.com>',
+      from: '"FastLogix" <noreply@fastlogix.org>',
       to: receiver.email,
       subject: "Incoming Package - FastLogix",
       html: `<p>Dear ${receiver.name},</p><p>A package has been created for you. Stay tuned for tracking details.</p>`
