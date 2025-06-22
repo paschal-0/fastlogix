@@ -1,32 +1,39 @@
 import React, { useEffect, useState } from 'react';
 import { Link } from 'react-router-dom';
-import './AdminChatsList.css'; // ✅ We'll write this next!
+import API from '../../api'; // 👈 uses your axios helper
+import './AdminChatsList.css';
 
 const AdminChatsList = () => {
-  const [orders, setOrders] = useState([]);
+  const [chats, setChats] = useState([]);
 
   useEffect(() => {
-    // TODO: Replace with real backend call
-    setOrders([
-      { _id: '123456', customer: 'John Doe' },
-      { _id: '789012', customer: 'Jane Smith' },
-      { _id: '345678', customer: 'Michael Johnson' },
-    ]);
-  }, []);
+  const fetchActiveChats = async () => {
+    try {
+      const res = await fetch('https://fastlogix-backend.onrender.com/api/chats/active');
+      const data = await res.json();
+      setChats(data);
+    } catch (err) {
+      console.error('Failed to fetch active chats:', err);
+    }
+  };
+
+  fetchActiveChats();
+}, []);
+
 
   return (
     <div className="admin-chats-list-page">
       <div className="admin-chats-list-container">
         <h2>Active Chats</h2>
-        {orders.length === 0 ? (
+        {chats.length === 0 ? (
           <p>No active chats.</p>
         ) : (
           <div className="chats-grid">
-            {orders.map(order => (
-              <div key={order._id} className="chat-card">
-                <h3>Order #{order._id}</h3>
-                <p><strong>Customer:</strong> {order.customer}</p>
-                <Link to={`/admin/chat/${order._id}`}>
+            {chats.map(chat => (
+              <div key={chat.orderId} className="chat-card">
+                <h3>Order #{chat.orderId}</h3>
+                <p><strong>Customer:</strong> {chat.customer}</p>
+                <Link to={`/admin/chat/${chat.orderId}`}>
                   <button>Open Chat</button>
                 </Link>
               </div>

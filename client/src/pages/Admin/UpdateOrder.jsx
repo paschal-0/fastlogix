@@ -29,7 +29,7 @@ const UpdateOrder = () => {
   useEffect(() => {
     const fetchOrder = async () => {
       try {
-        const res = await axios.get(`/api/orders/${id}`);
+        const res = await axios.get(`https://fastlogix-backend.onrender.com/api/orders/${id}`);
         const data = res.data;
 
         // ✅ MERGE WITH SAFE DEFAULTS
@@ -68,7 +68,7 @@ const UpdateOrder = () => {
     e.preventDefault();
     setUpdating(true);
     try {
-      await axios.put(`/api/orders/${id}`, {
+      await axios.put(`https://fastlogix-backend.onrender.com/api/orders/${id}`, {
         sender: formData.sender,
         receiver: formData.receiver,
         packageDetails: formData.packageDetails,
@@ -91,7 +91,7 @@ const UpdateOrder = () => {
     }
     setUpdatingStatus(true);
     try {
-      await axios.patch(`/api/orders/${manualOrderId}/status`, { status: formData.status });
+      await axios.patch(`https://fastlogix-backend.onrender.com/api/orders/${manualOrderId}/status`, { status: formData.status });
       toast.success('✅ Status updated!');
     } catch (error) {
       toast.error('❌ Failed to update status.');
@@ -107,7 +107,7 @@ const UpdateOrder = () => {
     }
     setUpdatingLocation(true);
     try {
-      await axios.patch(`/api/orders/${manualOrderId}/location`, { location: formData.location });
+      await axios.patch(`https://fastlogix-backend.onrender.com/api/orders/${manualOrderId}/location`, { location: formData.location });
       toast.success('✅ Location updated!');
     } catch (error) {
       toast.error('❌ Failed to update location.');

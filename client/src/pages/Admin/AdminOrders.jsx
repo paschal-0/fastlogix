@@ -8,7 +8,7 @@ export default function AdminOrders() {
   const [loading, setLoading] = useState(true);
 
   useEffect(() => {
-    fetch('http://localhost:5000/api/orders')
+    fetch('https://fastlogix-backend.onrender.com/api/orders')
       .then(res => res.json())
       .then(data => {
         setOrders(data);

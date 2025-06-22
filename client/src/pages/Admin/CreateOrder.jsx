@@ -29,7 +29,7 @@ const CreateOrder = () => {
     setLoading(true);
 
     try {
-      await axios.post('/api/orders', formData);
+      await axios.post('https://fastlogix-backend.onrender.com/api/orders', formData);
       toast.success('✅ Order created successfully!');
 
       setFormData({

@@ -3,7 +3,7 @@ import io from 'socket.io-client';
 import Dropzone from 'react-dropzone';
 import './ClientChat.css';
 
-const socket = io('http://localhost:5000');
+const socket = io('https://fastlogix-backend.onrender.com');
 
 const ClientChat = () => {
   const [orderId, setOrderId] = useState('');

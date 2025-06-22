@@ -32,7 +32,7 @@ const TrackOrder = () => {
 
     try {
       setLoading(true);
-      const res = await axios.get(`http://localhost:5000/api/orders/track/${orderId}`);
+      const res = await axios.get(`https://fastlogix-backend.onrender.com/api/orders/track/${orderId}`);
       setResult(res.data);
       setError('');
     } catch (err) {

@@ -3,7 +3,7 @@ import { useParams } from 'react-router-dom';
 import io from 'socket.io-client';
 import './AdminChat.css';
 
-const socket = io('http://localhost:5000');
+const socket = io('https://fastlogix-backend.onrender.com');
 
 const AdminChat = () => {
   const { orderId: paramOrderId } = useParams();
