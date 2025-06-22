@@ -108,14 +108,17 @@ app.get('/', (req, res) => {
   res.send("Welcome to FastLogix backend!");
 });
 
-// ✅ Configure Nodemailer (SendGrid)
+// ✅ Configure Nodemailer (Zoho SMTP)
 const transporter = nodemailer.createTransport({
-  service: 'SendGrid',
+  host: 'smtp.zoho.com',
+  port: 465,          // secure port for Zoho
+  secure: true,       // use TLS
   auth: {
-    user: 'apikey',
-    pass: 'YOUR_SENDGRID_API_KEY'
+    user: 'support@fastlogix.org', // e.g. 'support@fastlogix.com'
+    pass: 'srKPyRC2Z1Yk'          // your app password
   }
 });
+
 
 // ✅ 4️⃣ Create Order (with geocoding)
 app.post('/api/orders', async (req, res) => {
