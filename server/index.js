@@ -17,12 +17,10 @@ const io = new Server(server, {
   }
 });
 
-mongoose.connect('mongodb+srv://paschalokafor450:NvM6LAKinAYYZ3hu@fastlogix.cacgj8m.mongodb.net/fastlogix?retryWrites=true&w=majority&appName=fastlogix', {
-  useNewUrlParser: true,
-  useUnifiedTopology: true
-})
-.then(() => console.log('✅ MongoDB connected to fastlogix DB'))
-.catch(err => console.error('❌ MongoDB connection error:', err));
+mongoose.connect('mongodb+srv://paschalokafor450:NvM6LAKinAYYZ3hu@fastlogix.cacgj8m.mongodb.net/fastlogix')
+  .then(() => console.log('✅ MongoDB connected to fastlogix DB'))
+  .catch(err => console.error('❌ MongoDB connection error:', err));
+
 
 // ✅ Helper: Geocode an address using OpenStreetMap
 async function geocodeAddress(address) {
