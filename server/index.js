@@ -8,19 +8,26 @@ import mongoose from 'mongoose';
 import fetch from 'node-fetch'; // ✅ For geocoding
 import cors from 'cors';
 
+// ✅ Create Express
 const app = express();
-// Allow only your frontend domain:
+
+// ✅ Allowed origins
 const allowedOrigins = [
   'https://www.fastlogix.org',
   'http://localhost:3000'
 ];
 
+// ✅ CORS for HTTP
 app.use(cors({
   origin: allowedOrigins,
   methods: ['GET', 'POST', 'PATCH', 'DELETE', 'PUT'],
   credentials: true
 }));
 
+// ✅ Create HTTP server AFTER app
+const server = http.createServer(app);
+
+// ✅ Attach Socket.IO AFTER server
 const io = new Server(server, {
   cors: {
     origin: allowedOrigins,
