@@ -10,6 +10,7 @@ import cors from 'cors';
 
 // ✅ Create Express
 const app = express();
+app.use(express.json());
 
 // ✅ Allowed origins
 const allowedOrigins = [
