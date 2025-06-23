@@ -10,16 +10,22 @@ import cors from 'cors';
 
 const app = express();
 // Allow only your frontend domain:
+const allowedOrigins = [
+  'https://www.fastlogix.org',
+  'http://localhost:3000'
+];
+
 app.use(cors({
-  origin: 'https://www.fastlogix.org',
+  origin: allowedOrigins,
   methods: ['GET', 'POST', 'PATCH', 'DELETE', 'PUT'],
   credentials: true
 }));
 
-const server = http.createServer(app);
 const io = new Server(server, {
   cors: {
-    origin: "*"
+    origin: allowedOrigins,
+    methods: ["GET", "POST"],
+    credentials: true
   }
 });
 
