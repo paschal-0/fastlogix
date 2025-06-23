@@ -187,14 +187,14 @@ app.post('/api/orders', async (req, res) => {
       console.log(`✅ Order ID generated: ${newOrder.orderId}`);
 
       await transporter.sendMail({
-        from: '"FastLogix" <noreply@fastlogix.com>',
+        from: '"FastLogix" <support@fastlogix.org>',
         to: sender.email,
         subject: "Your Order ID - FastLogix",
         html: `<p>Dear ${sender.name},</p><p>Your Order ID is <b>${newOrder.orderId}</b>.</p>`
       });
 
       await transporter.sendMail({
-        from: '"FastLogix" <noreply@fastlogix.com>',
+        from: '"FastLogix" <support@fastlogix.org>',
         to: receiver.email,
         subject: "Tracking ID - FastLogix",
         html: `<p>Dear ${receiver.name},</p><p>Your package Order ID is <b>${newOrder.orderId}</b>.</p>`
