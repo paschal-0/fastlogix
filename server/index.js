@@ -186,19 +186,52 @@ app.post('/api/orders', async (req, res) => {
       await newOrder.save();
       console.log(`✅ Order ID generated: ${newOrder.orderId}`);
 
-      await transporter.sendMail({
-        from: '"FastLogix" <support@fastlogix.org>',
-        to: sender.email,
-        subject: "Your Order ID - FastLogix",
-        html: `<p>Dear ${sender.name},</p><p>Your Order ID is <b>${newOrder.orderId}</b>.</p>`
-      });
+     await transporter.sendMail({
+  from: '"FastLogix" <support@fastlogix.org>',
+  to: sender.email,
+  subject: `Your FastLogix Order ID: ${newOrder.orderId}`,
+  html: `
+    <div style="font-family: Arial, sans-serif; line-height: 1.6; color: #333; max-width: 600px; margin: auto; border: 1px solid #eee; padding: 20px;">
+      <h2 style="color: #1e88e5;">🚚 FastLogix Order Confirmation</h2>
+      <p>Hi ${sender.name},</p>
+      <p>We’re excited to inform you that your order has been successfully created and your <strong>Order ID</strong> is:</p>
+      <h3 style="color: #1e88e5;">${newOrder.orderId}</h3>
+      <p>You can track your order status anytime using the link below:</p>
+      <p style="text-align: center; margin: 20px 0;">
+        <a href="https://www.fastlogix.org/track/${newOrder.orderId}" style="background: #1e88e5; color: #fff; padding: 12px 20px; text-decoration: none; border-radius: 4px;">Track My Order</a>
+      </p>
+      <p>If you have any questions, feel free to contact our support team at <a href="mailto:support@fastlogix.org">support@fastlogix.org</a>.</p>
+      <p>Thank you for choosing FastLogix!</p>
+      <hr style="border: none; border-top: 1px solid #eee;" />
+      <p style="font-size: 12px; color: #888;">&copy; ${new Date().getFullYear()} FastLogix. All rights reserved.</p>
+    </div>
+  `
+});
 
+
+      
       await transporter.sendMail({
-        from: '"FastLogix" <support@fastlogix.org>',
-        to: receiver.email,
-        subject: "Tracking ID - FastLogix",
-        html: `<p>Dear ${receiver.name},</p><p>Your package Order ID is <b>${newOrder.orderId}</b>.</p>`
-      });
+  from: '"FastLogix" <support@fastlogix.org>',
+  to: receiver.email,
+  subject: `Your FastLogix Package ID: ${newOrder.orderId}`,
+  html: `
+    <div style="font-family: Arial, sans-serif; line-height: 1.6; color: #333; max-width: 600px; margin: auto; border: 1px solid #eee; padding: 20px;">
+      <h2 style="color: #1e88e5;">📦 FastLogix Package Update</h2>
+      <p>Hi ${receiver.name},</p>
+      <p>A new package is on its way to you! Your <strong>Tracking ID</strong> is:</p>
+      <h3 style="color: #1e88e5;">${newOrder.orderId}</h3>
+      <p>You can check the delivery status anytime:</p>
+      <p style="text-align: center; margin: 20px 0;">
+        <a href="https://www.fastlogix.org/track/${newOrder.orderId}" style="background: #1e88e5; color: #fff; padding: 12px 20px; text-decoration: none; border-radius: 4px;">Track My Package</a>
+      </p>
+      <p>If you have questions, we’re here to help at <a href="mailto:support@fastlogix.org">support@fastlogix.org</a>.</p>
+      <p>Thank you for using FastLogix!</p>
+      <hr style="border: none; border-top: 1px solid #eee;" />
+      <p style="font-size: 12px; color: #888;">&copy; ${new Date().getFullYear()} FastLogix. All rights reserved.</p>
+    </div>
+  `
+});
+
 
       console.log(`📧 Real Order ID emails sent to Sender & Receiver.`);
     }, 30 * 1000);
@@ -250,7 +283,7 @@ app.patch('/api/orders/:orderId/location', async (req, res) => {
   }
 });
 
-// ✅ 8️⃣ Track order by OrderID
+/// ✅ 8️⃣ Track order by OrderID (improved: returns packageDetails too)
 app.get('/api/orders/track/:orderId', async (req, res) => {
   const { orderId } = req.params;
   const order = await Order.findOne({ orderId });
@@ -259,9 +292,13 @@ app.get('/api/orders/track/:orderId', async (req, res) => {
   res.json({
     orderId: order.orderId,
     status: order.status,
-    location: order.location
+    location: order.location,
+    packageDetails: order.packageDetails,    // ✅ Include package info
+    sender: order.sender,                    // (optional)
+    receiver: order.receiver                 // (optional)
   });
 });
+
 
 // ✅ 9️⃣ Update status by OrderID
 app.patch('/api/orders/:orderId/status', async (req, res) => {
