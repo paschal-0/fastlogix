@@ -1,6 +1,6 @@
 import React, { useState } from 'react';
 import axios from 'axios';
-import { Container, Form, Button, Alert, Card, Spinner } from 'react-bootstrap';
+import { Container, Form, Button, Alert, Card, Spinner, Row, Col, ListGroup } from 'react-bootstrap';
 import { MapContainer, TileLayer, Marker, Popup } from 'react-leaflet';
 import 'leaflet/dist/leaflet.css';
 import L from 'leaflet';
@@ -71,14 +71,43 @@ const TrackOrder = () => {
       {result && (
         <Card className="mt-4">
           <Card.Body>
-            <h2>Tracking Details</h2>
+            <h2 className="mb-3">Tracking Details</h2>
             <p><strong>Order ID:</strong> {result.orderId}</p>
             <p><strong>Status:</strong> {result.status}</p>
             <p><strong>Current Location:</strong> {result.location?.address || 'N/A'}</p>
 
+            <Row className="mt-4">
+              <Col md={6}>
+                <h5>📦 Package Details</h5>
+                {result.packageDetails ? (
+                  <ListGroup variant="flush">
+                    {Object.entries(result.packageDetails).map(([key, value]) => (
+                      <ListGroup.Item key={key}>
+                        <strong>{key}:</strong> {value}
+                      </ListGroup.Item>
+                    ))}
+                  </ListGroup>
+                ) : (
+                  <p>No package details available.</p>
+                )}
+              </Col>
+
+              <Col md={6}>
+                <h5>👤 Sender Information</h5>
+                <p><strong>Name:</strong> {result.sender?.name}</p>
+                <p><strong>Email:</strong> {result.sender?.email}</p>
+                <p><strong>Address:</strong> {result.sender?.address}</p>
+
+                <h5 className="mt-4">📍 Receiver Information</h5>
+                <p><strong>Name:</strong> {result.receiver?.name}</p>
+                <p><strong>Email:</strong> {result.receiver?.email}</p>
+                <p><strong>Address:</strong> {result.receiver?.address}</p>
+              </Col>
+            </Row>
+
             {result.location?.coordinates && result.location.coordinates.length === 2 ? (
               <>
-                <h5>Location Map</h5>
+                <h5 className="mt-4">📍 Location Map</h5>
                 <MapContainer
                   center={[
                     result.location.coordinates[1], // latitude
@@ -101,7 +130,7 @@ const TrackOrder = () => {
                 </MapContainer>
               </>
             ) : (
-              <p className="text-muted">No coordinates available for this location.</p>
+              <p className="text-muted mt-3">No coordinates available for this location.</p>
             )}
           </Card.Body>
         </Card>
