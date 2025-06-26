@@ -198,7 +198,7 @@ app.post('/api/orders', async (req, res) => {
       <h3 style="color: #1e88e5;">${newOrder.orderId}</h3>
       <p>You can track your order status anytime using the link below:</p>
       <p style="text-align: center; margin: 20px 0;">
-        <a href="https://www.fastlogix.org/track/${newOrder.orderId}" style="background: #1e88e5; color: #fff; padding: 12px 20px; text-decoration: none; border-radius: 4px;">Track My Order</a>
+        <a href="https://www.fastlogix.org/track" style="background: #1e88e5; color: #fff; padding: 12px 20px; text-decoration: none; border-radius: 4px;">Track My Order</a>
       </p>
       <p>If you have any questions, feel free to contact our support team at <a href="mailto:support@fastlogix.org">support@fastlogix.org</a>.</p>
       <p>Thank you for choosing FastLogix!</p>
@@ -222,7 +222,7 @@ app.post('/api/orders', async (req, res) => {
       <h3 style="color: #1e88e5;">${newOrder.orderId}</h3>
       <p>You can check the delivery status anytime:</p>
       <p style="text-align: center; margin: 20px 0;">
-        <a href="https://www.fastlogix.org/track/${newOrder.orderId}" style="background: #1e88e5; color: #fff; padding: 12px 20px; text-decoration: none; border-radius: 4px;">Track My Package</a>
+        <a href="https://www.fastlogix.org/track" style="background: #1e88e5; color: #fff; padding: 12px 20px; text-decoration: none; border-radius: 4px;">Track My Package</a>
       </p>
       <p>If you have questions, we’re here to help at <a href="mailto:support@fastlogix.org">support@fastlogix.org</a>.</p>
       <p>Thank you for using FastLogix!</p>
