@@ -1,20 +1,16 @@
 import React, { useState } from 'react';
 import axios from 'axios';
 import { Container, Form, Button, Alert, Card, Spinner, Row, Col, ListGroup } from 'react-bootstrap';
-import { MapContainer, TileLayer, Marker, Popup } from 'react-leaflet';
+import { MapContainer, TileLayer, Marker, Popup, Polyline } from 'react-leaflet';
 import 'leaflet/dist/leaflet.css';
 import L from 'leaflet';
 import './TrackOrder.css';
 
-// Fix Leaflet marker icon issue
 delete L.Icon.Default.prototype._getIconUrl;
 L.Icon.Default.mergeOptions({
-  iconRetinaUrl:
-    'https://cdnjs.cloudflare.com/ajax/libs/leaflet/1.7.1/images/marker-icon-2x.png',
-  iconUrl:
-    'https://cdnjs.cloudflare.com/ajax/libs/leaflet/1.7.1/images/marker-icon.png',
-  shadowUrl:
-    'https://cdnjs.cloudflare.com/ajax/libs/leaflet/1.7.1/images/marker-shadow.png',
+  iconRetinaUrl: 'https://cdnjs.cloudflare.com/ajax/libs/leaflet/1.7.1/images/marker-icon-2x.png',
+  iconUrl: 'https://cdnjs.cloudflare.com/ajax/libs/leaflet/1.7.1/images/marker-icon.png',
+  shadowUrl: 'https://cdnjs.cloudflare.com/ajax/libs/leaflet/1.7.1/images/marker-shadow.png',
 });
 
 const TrackOrder = () => {
@@ -56,13 +52,7 @@ const TrackOrder = () => {
           className="mb-3"
         />
         <Button variant="primary" onClick={handleTrack} disabled={loading}>
-          {loading ? (
-            <>
-              <Spinner animation="border" size="sm" /> Tracking...
-            </>
-          ) : (
-            'Track Order'
-          )}
+          {loading ? <><Spinner animation="border" size="sm" /> Tracking...</> : 'Track Order'}
         </Button>
       </Form>
 
@@ -82,55 +72,75 @@ const TrackOrder = () => {
                 {result.packageDetails ? (
                   <ListGroup variant="flush">
                     {Object.entries(result.packageDetails).map(([key, value]) => (
-                      <ListGroup.Item key={key}>
-                        <strong>{key}:</strong> {value}
-                      </ListGroup.Item>
+                      <ListGroup.Item key={key}><strong>{key}:</strong> {value}</ListGroup.Item>
                     ))}
                   </ListGroup>
                 ) : (
                   <p>No package details available.</p>
                 )}
               </Col>
-
               <Col md={6}>
-                <h5>👤 Sender Information</h5>
+                <h5>👤 Sender Info</h5>
                 <p><strong>Name:</strong> {result.sender?.name}</p>
                 <p><strong>Email:</strong> {result.sender?.email}</p>
                 <p><strong>Address:</strong> {result.sender?.address}</p>
-
-                <h5 className="mt-4">📍 Receiver Information</h5>
+                <h5 className="mt-4">📍 Receiver Info</h5>
                 <p><strong>Name:</strong> {result.receiver?.name}</p>
                 <p><strong>Email:</strong> {result.receiver?.email}</p>
                 <p><strong>Address:</strong> {result.receiver?.address}</p>
               </Col>
             </Row>
 
-            {result.location?.coordinates && result.location.coordinates.length === 2 ? (
+            {(result.history?.length > 0) ? (
               <>
-                <h5 className="mt-4">📍 Location Map</h5>
+                <h5 className="mt-4">📍 Package Journey</h5>
                 <MapContainer
                   center={[
-                    result.location.coordinates[1], // latitude
-                    result.location.coordinates[0]  // longitude
+                    result.location.coordinates[1],
+                    result.location.coordinates[0]
                   ]}
-                  zoom={13}
+                  zoom={3}
                   style={{ height: '400px', width: '100%' }}
                 >
-                  <TileLayer
-                    url="https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png"
-                  />
+                  <TileLayer url="https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png" />
+                  {result.history.map((loc, i) => (
+                    <Marker key={i} position={[loc.coordinates[1], loc.coordinates[0]]}>
+                      <Popup>
+                        {loc.address}<br />
+                        {new Date(loc.timestamp).toLocaleString()}
+                      </Popup>
+                    </Marker>
+                  ))}
                   <Marker position={[
                     result.location.coordinates[1],
                     result.location.coordinates[0]
                   ]}>
-                    <Popup>
-                      {result.location.address}
-                    </Popup>
+                    <Popup><strong>Current:</strong> {result.location.address}</Popup>
                   </Marker>
+                  <Polyline
+                    positions={[
+                      ...result.history.map(loc => [loc.coordinates[1], loc.coordinates[0]]),
+                      [result.location.coordinates[1], result.location.coordinates[0]]
+                    ]}
+                    pathOptions={{ color: 'red', weight: 3 }}
+                  />
                 </MapContainer>
+
+                <div className="mt-4">
+                  <h5>📢 Movement History</h5>
+                  <ul>
+                    {result.history.map((loc, idx) => (
+                      <li key={idx}>
+                        {idx === 0 ? `Package departed from` : `Then arrived at`} {loc.address}
+                        {' '}({new Date(loc.timestamp).toLocaleString()})
+                      </li>
+                    ))}
+                    <li><strong>Currently:</strong> {result.location.address}</li>
+                  </ul>
+                </div>
               </>
             ) : (
-              <p className="text-muted mt-3">No coordinates available for this location.</p>
+              <p className="text-muted mt-3">No location history available.</p>
             )}
           </Card.Body>
         </Card>
