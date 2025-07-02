@@ -59,31 +59,24 @@ async function geocodeAddress(address) {
   }
 }
 
-// ✅ 2️⃣ Define Order Schema (updated)
+// ✅ Updated schema with history[]
 const orderSchema = new mongoose.Schema({
-  sender: {
-    name: String,
-    email: String,
-    address: String
-  },
-  receiver: {
-    name: String,
-    email: String,
-    address: String
-  },
+  sender: { name: String, email: String, address: String },
+  receiver: { name: String, email: String, address: String },
   packageDetails: Object,
-  status: {
-    type: String,
-    default: "Pending"
-  },
+  status: { type: String, default: "Pending" },
   orderId: String,
   location: {
     address: String,
-    coordinates: {
-      type: [Number], // [lon, lat]
-      index: '2dsphere'
+    coordinates: { type: [Number], index: '2dsphere' } // [lon, lat]
+  },
+  history: [
+    {
+      address: String,
+      coordinates: [Number],
+      timestamp: { type: Date, default: Date.now }
     }
-  }
+  ]
 }, { timestamps: true });
 
 const Order = mongoose.model('Order', orderSchema);
@@ -261,29 +254,43 @@ app.get('/api/orders', async (req, res) => {
   res.json(orders);
 });
 
-// ✅ 7️⃣ Update location by OrderID (with geocoding)
+// ✅ Update location + push to history
 app.patch('/api/orders/:orderId/location', async (req, res) => {
   const { orderId } = req.params;
   const { location } = req.body;
 
   try {
     const geo = await geocodeAddress(location);
-    const order = await Order.findOneAndUpdate(
-      { orderId },
-      { location: { address: location, coordinates: [geo.lon, geo.lat] } },
-      { new: true }
-    );
-
+    const order = await Order.findOne({ orderId });
     if (!order) return res.status(404).json({ message: "Order not found" });
 
+    // Append previous location to history
+    if (order.location?.address && order.location?.coordinates?.length === 2) {
+      order.history = order.history || [];
+      order.history.push({
+        address: order.location.address,
+        coordinates: order.location.coordinates,
+        timestamp: new Date()
+      });
+    }
+
+    // Update current location
+    order.location = {
+      address: location,
+      coordinates: [geo.lon, geo.lat]
+    };
+
+    await order.save();
     res.json({ message: `Location updated for ${orderId}`, order });
+
   } catch (err) {
     console.error(err);
     res.status(500).json({ message: "Geocoding failed", error: err.message });
   }
 });
 
-/// ✅ 8️⃣ Track order by OrderID (improved: returns packageDetails too)
+
+// ✅ Enhanced Track endpoint
 app.get('/api/orders/track/:orderId', async (req, res) => {
   const { orderId } = req.params;
   const order = await Order.findOne({ orderId });
@@ -293,9 +300,10 @@ app.get('/api/orders/track/:orderId', async (req, res) => {
     orderId: order.orderId,
     status: order.status,
     location: order.location,
-    packageDetails: order.packageDetails,    // ✅ Include package info
-    sender: order.sender,                    // (optional)
-    receiver: order.receiver                 // (optional)
+    history: order.history || [],
+    packageDetails: order.packageDetails,
+    sender: order.sender,
+    receiver: order.receiver
   });
 });
 
