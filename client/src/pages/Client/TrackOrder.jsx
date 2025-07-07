@@ -1,16 +1,36 @@
 import React, { useState } from 'react';
 import axios from 'axios';
-import { Container, Form, Button, Alert, Card, Spinner, Row, Col, ListGroup } from 'react-bootstrap';
-import { MapContainer, TileLayer, Marker, Popup, Polyline } from 'react-leaflet';
+import {
+  Container,
+  Form,
+  Button,
+  Alert,
+  Card,
+  Spinner,
+  Row,
+  Col,
+  ListGroup
+} from 'react-bootstrap';
+import {
+  MapContainer,
+  TileLayer,
+  Marker,
+  Popup,
+  Polyline
+} from 'react-leaflet';
 import 'leaflet/dist/leaflet.css';
 import L from 'leaflet';
 import './TrackOrder.css';
 
+// Fix Leaflet marker icon
 delete L.Icon.Default.prototype._getIconUrl;
 L.Icon.Default.mergeOptions({
-  iconRetinaUrl: 'https://cdnjs.cloudflare.com/ajax/libs/leaflet/1.7.1/images/marker-icon-2x.png',
-  iconUrl: 'https://cdnjs.cloudflare.com/ajax/libs/leaflet/1.7.1/images/marker-icon.png',
-  shadowUrl: 'https://cdnjs.cloudflare.com/ajax/libs/leaflet/1.7.1/images/marker-shadow.png',
+  iconRetinaUrl:
+    'https://cdnjs.cloudflare.com/ajax/libs/leaflet/1.7.1/images/marker-icon-2x.png',
+  iconUrl:
+    'https://cdnjs.cloudflare.com/ajax/libs/leaflet/1.7.1/images/marker-icon.png',
+  shadowUrl:
+    'https://cdnjs.cloudflare.com/ajax/libs/leaflet/1.7.1/images/marker-shadow.png'
 });
 
 const TrackOrder = () => {
@@ -28,7 +48,9 @@ const TrackOrder = () => {
 
     try {
       setLoading(true);
-      const res = await axios.get(`https://fastlogix-backend.onrender.com/api/orders/track/${orderId}`);
+      const res = await axios.get(
+        `https://fastlogix-backend.onrender.com/api/orders/track/${orderId}`
+      );
       setResult(res.data);
       setError('');
     } catch (err) {
@@ -52,7 +74,13 @@ const TrackOrder = () => {
           className="mb-3"
         />
         <Button variant="primary" onClick={handleTrack} disabled={loading}>
-          {loading ? <><Spinner animation="border" size="sm" /> Tracking...</> : 'Track Order'}
+          {loading ? (
+            <>
+              <Spinner animation="border" size="sm" /> Tracking...
+            </>
+          ) : (
+            'Track Order'
+          )}
         </Button>
       </Form>
 
@@ -91,40 +119,51 @@ const TrackOrder = () => {
               </Col>
             </Row>
 
-            {(result.history?.length > 0) ? (
+            {result.history?.length > 0 ? (
               <>
                 <h5 className="mt-4">📍 Package Journey</h5>
-                <MapContainer
-                  center={[
-                    result.location.coordinates[1],
-                    result.location.coordinates[0]
-                  ]}
-                  zoom={3}
-                  style={{ height: '400px', width: '100%' }}
-                >
-                  <TileLayer url="https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png" />
-                  {result.history.map((loc, i) => (
-                    <Marker key={i} position={[loc.coordinates[1], loc.coordinates[0]]}>
-                      <Popup>
-                        {loc.address}<br />
-                        {new Date(loc.timestamp).toLocaleString()}
-                      </Popup>
-                    </Marker>
-                  ))}
-                  <Marker position={[
-                    result.location.coordinates[1],
-                    result.location.coordinates[0]
-                  ]}>
-                    <Popup><strong>Current:</strong> {result.location.address}</Popup>
-                  </Marker>
-                  <Polyline
-                    positions={[
-                      ...result.history.map(loc => [loc.coordinates[1], loc.coordinates[0]]),
-                      [result.location.coordinates[1], result.location.coordinates[0]]
+                <div style={{ height: '400px', width: '100%' }}>
+                  <MapContainer
+                    center={[
+                      result.location.coordinates[1],
+                      result.location.coordinates[0]
                     ]}
-                    pathOptions={{ color: 'red', weight: 3 }}
-                  />
-                </MapContainer>
+                    zoom={3}
+                    scrollWheelZoom={true}
+                    style={{ height: '100%', width: '100%' }}
+                  >
+                    <TileLayer
+                      url="https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png"
+                    />
+                    {result.history.map((loc, i) => (
+                      <Marker
+                        key={i}
+                        position={[loc.coordinates[1], loc.coordinates[0]]}
+                      >
+                        <Popup>
+                          {loc.address}
+                          <br />
+                          {new Date(loc.timestamp).toLocaleString()}
+                        </Popup>
+                      </Marker>
+                    ))}
+                    <Marker
+                      position={[
+                        result.location.coordinates[1],
+                        result.location.coordinates[0]
+                      ]}
+                    >
+                      <Popup><strong>Current:</strong> {result.location.address}</Popup>
+                    </Marker>
+                    <Polyline
+                      positions={[
+                        ...result.history.map(loc => [loc.coordinates[1], loc.coordinates[0]]),
+                        [result.location.coordinates[1], result.location.coordinates[0]]
+                      ]}
+                      pathOptions={{ color: 'red', weight: 3 }}
+                    />
+                  </MapContainer>
+                </div>
 
                 <div className="mt-4">
                   <h5>📢 Movement History</h5>
