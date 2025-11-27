@@ -37,29 +37,78 @@ const io = new Server(server, {
   }
 });
 
+// ---------- Environment / config (use env vars; fallbacks included)
+const MONGO_URI = process.env.MONGO_URI || 'mongodb+srv://paschalokafor450:NvM6LAKinAYYZ3hu@fastlogix.cacgj8m.mongodb.net/fastlogix';
+const SMTP_USER = process.env.SMTP_USER || 'support@fastlogix.org';
+const SMTP_PASS = process.env.SMTP_PASS || 'srKPyRC2Z1Yk';
+const SECRET_KEY = process.env.SECRET_KEY || 'mysecretkey';
+const GEOCODER_USER_AGENT = process.env.GEOCODER_USER_AGENT || 'FastLogix/1.0 (support@fastlogix.org)';
 
+// Warn if using fallback values (helpful for Render logs)
+if (!process.env.MONGO_URI) console.warn('⚠️ Using fallback MONGO_URI. Set MONGO_URI in environment for production.');
+if (!process.env.SMTP_USER || !process.env.SMTP_PASS) console.warn('⚠️ Using fallback SMTP credentials. Set SMTP_USER and SMTP_PASS in environment.');
+if (!process.env.SECRET_KEY) console.warn('⚠️ Using fallback SECRET_KEY. Set SECRET_KEY in environment for production.');
 
-
-mongoose.connect('mongodb+srv://paschalokafor450:NvM6LAKinAYYZ3hu@fastlogix.cacgj8m.mongodb.net/fastlogix')
+// ---------- Mongo connection
+mongoose.connect(MONGO_URI)
   .then(() => console.log('✅ MongoDB connected to fastlogix DB'))
   .catch(err => console.error('❌ MongoDB connection error:', err));
 
-
-// ✅ Helper: Geocode an address using OpenStreetMap
+// ---------- Helper: Robust Geocode function (Nominatim-compatible, defensive)
 async function geocodeAddress(address) {
-  const res = await fetch(`https://nominatim.openstreetmap.org/search?q=${encodeURIComponent(address)}&format=json&limit=1`);
-  const data = await res.json();
-  if (data && data.length > 0) {
-    return {
-      lat: parseFloat(data[0].lat),
-      lon: parseFloat(data[0].lon)
-    };
-  } else {
-    throw new Error(`Geocoding failed for: ${address}`);
+  if (!address || typeof address !== 'string') {
+    throw new Error('Invalid address passed to geocodeAddress');
   }
+
+  const url = `https://nominatim.openstreetmap.org/search?q=${encodeURIComponent(address)}&format=json&limit=1`;
+
+  const res = await fetch(url, {
+    method: 'GET',
+    headers: {
+      // Nominatim requires a valid User-Agent with contact info
+      'User-Agent': GEOCODER_USER_AGENT,
+      'Accept': 'application/json'
+    },
+    // you may set redirect: 'manual' if you want to detect redirects
+  });
+
+  const contentType = res.headers.get('content-type') || '';
+  const textBody = await res.text();
+
+  // Helpful debugging logs (Render logs)
+  console.error('🔎 Geocode response status:', res.status, res.statusText);
+  console.error('🔎 Geocode content-type:', contentType);
+  // Log a limited snippet to avoid massive logs
+  console.error('🔎 Geocode response body (first 1000 chars):', textBody.slice(0, 1000));
+
+  if (!res.ok) {
+    // Include a short snippet of the body so the cause (HTML error page, Cloudflare block, etc.) is visible in logs
+    throw new Error(`Geocode API HTTP ${res.status}: ${res.statusText}. Body: ${textBody.slice(0, 500)}`);
+  }
+
+  if (!contentType.includes('application/json')) {
+    // Defensive: do not attempt to JSON.parse HTML
+    throw new Error(`Expected JSON from geocode API but got content-type: ${contentType}. Body: ${textBody.slice(0,500)}`);
+  }
+
+  let data;
+  try {
+    data = JSON.parse(textBody);
+  } catch (err) {
+    throw new Error(`Failed to parse geocode JSON: ${err.message}. Body: ${textBody.slice(0,500)}`);
+  }
+
+  if (!Array.isArray(data) || data.length === 0) {
+    throw new Error(`Geocoding returned no results for: ${address}`);
+  }
+
+  return {
+    lat: parseFloat(data[0].lat),
+    lon: parseFloat(data[0].lon)
+  };
 }
 
-// ✅ Updated schema with history[]
+// ---------- Schemas
 const orderSchema = new mongoose.Schema({
   sender: { name: String, email: String, address: String },
   receiver: { name: String, email: String, address: String },
@@ -81,7 +130,7 @@ const orderSchema = new mongoose.Schema({
 
 const Order = mongoose.model('Order', orderSchema);
 
-// ✅ ChatMessage schema
+// ChatMessage schema
 const chatMessageSchema = new mongoose.Schema({
   id: { type: Number, required: true },
   orderId: { type: String, required: true },
@@ -93,15 +142,12 @@ const chatMessageSchema = new mongoose.Schema({
 
 const ChatMessage = mongoose.model('ChatMessage', chatMessageSchema);
 
-// ✅ 3️⃣ Other backend logic
-
+// ---------- Basic routes & auth
 app.get('/api/test', (req, res) => {
   res.json({ message: 'FastLogix backend is working!' });
 });
 
-const SECRET_KEY = "mysecretkey";
-
-// Hardcoded admin
+// Hardcoded admin (password hashed)
 const adminUser = {
   username: "admin",
   passwordHash: bcrypt.hashSync("password123", 10)
@@ -124,19 +170,25 @@ app.get('/', (req, res) => {
   res.send("Welcome to FastLogix backend!");
 });
 
-// ✅ Configure Nodemailer (Zoho SMTP)
+// ---------- Configure Nodemailer (Zoho SMTP) using env vars
 const transporter = nodemailer.createTransport({
   host: 'smtp.zoho.com',
   port: 465,          // secure port for Zoho
   secure: true,       // use TLS
   auth: {
-    user: 'support@fastlogix.org', // e.g. 'support@fastlogix.com'
-    pass: 'srKPyRC2Z1Yk'          // your app password
+    user: SMTP_USER,
+    pass: SMTP_PASS
   }
 });
 
+// verify transporter at startup (non-blocking)
+transporter.verify().then(() => {
+  console.log('✅ SMTP transporter verified');
+}).catch(err => {
+  console.error('⚠️ SMTP transporter verification failed:', err && err.message ? err.message : err);
+});
 
-// ✅ 4️⃣ Create Order (with geocoding)
+// ---------- 4️⃣ Create Order (with geocoding) - improved error handling
 app.post('/api/orders', async (req, res) => {
   const { sender, receiver, packageDetails } = req.body;
 
@@ -145,7 +197,9 @@ app.post('/api/orders', async (req, res) => {
   }
 
   try {
+    // geocode receiver address (defensive)
     const geo = await geocodeAddress(receiver.address);
+
     const newOrder = new Order({
       sender,
       receiver,
@@ -158,106 +212,137 @@ app.post('/api/orders', async (req, res) => {
 
     await newOrder.save();
 
-    await transporter.sendMail({
-      from: '"FastLogix" <support@fastlogix.org>',
-      to: sender.email,
-      subject: "Order Created - FastLogix",
-      html: `<p>Dear ${sender.name},</p><p>Your order has been created. You will receive your Order ID soon.</p>`
-    });
-
-    await transporter.sendMail({
-      from: '"FastLogix" <support@fastlogix.org>',
-      to: receiver.email,
-      subject: "Incoming Package - FastLogix",
-      html: `<p>Dear ${receiver.name},</p><p>A package has been created for you. Stay tuned for tracking details.</p>`
-    });
-
-    console.log(`📧 Real emails sent to Sender & Receiver.`);
-
-    setTimeout(async () => {
-      newOrder.orderId = `ORD-${Math.floor(Math.random() * 1000000)}`;
-      await newOrder.save();
-      console.log(`✅ Order ID generated: ${newOrder.orderId}`);
-
-     await transporter.sendMail({
-  from: '"FastLogix" <support@fastlogix.org>',
-  to: sender.email,
-  subject: `Your FastLogix Order ID: ${newOrder.orderId}`,
-  html: `
-    <div style="font-family: Arial, sans-serif; line-height: 1.6; color: #333; max-width: 600px; margin: auto; border: 1px solid #eee; padding: 20px;">
-      <h2 style="color: #1e88e5;">🚚 FastLogix Order Confirmation</h2>
-      <p>Hi ${sender.name},</p>
-      <p>We’re excited to inform you that your order has been successfully created and your <strong>Order ID</strong> is:</p>
-      <h3 style="color: #1e88e5;">${newOrder.orderId}</h3>
-      <p>You can track your order status anytime using the link below:</p>
-      <p style="text-align: center; margin: 20px 0;">
-        <a href="https://www.fastlogix.org/track" style="background: #1e88e5; color: #fff; padding: 12px 20px; text-decoration: none; border-radius: 4px;">Track My Order</a>
-      </p>
-      <p>If you have any questions, feel free to contact our support team at <a href="mailto:support@fastlogix.org">support@fastlogix.org</a>.</p>
-      <p>Thank you for choosing FastLogix!</p>
-      <hr style="border: none; border-top: 1px solid #eee;" />
-      <p style="font-size: 12px; color: #888;">&copy; ${new Date().getFullYear()} FastLogix. All rights reserved.</p>
-    </div>
-  `
-});
-
-
-      
+    // send initial emails; wrap sends to avoid crashes if SMTP fails
+    try {
       await transporter.sendMail({
-  from: '"FastLogix" <support@fastlogix.org>',
-  to: receiver.email,
-  subject: `Your FastLogix Package ID: ${newOrder.orderId}`,
-  html: `
-    <div style="font-family: Arial, sans-serif; line-height: 1.6; color: #333; max-width: 600px; margin: auto; border: 1px solid #eee; padding: 20px;">
-      <h2 style="color: #1e88e5;">📦 FastLogix Package Update</h2>
-      <p>Hi ${receiver.name},</p>
-      <p>A new package is on its way to you! Your <strong>Tracking ID</strong> is:</p>
-      <h3 style="color: #1e88e5;">${newOrder.orderId}</h3>
-      <p>You can check the delivery status anytime:</p>
-      <p style="text-align: center; margin: 20px 0;">
-        <a href="https://www.fastlogix.org/track" style="background: #1e88e5; color: #fff; padding: 12px 20px; text-decoration: none; border-radius: 4px;">Track My Package</a>
-      </p>
-      <p>If you have questions, we’re here to help at <a href="mailto:support@fastlogix.org">support@fastlogix.org</a>.</p>
-      <p>Thank you for using FastLogix!</p>
-      <hr style="border: none; border-top: 1px solid #eee;" />
-      <p style="font-size: 12px; color: #888;">&copy; ${new Date().getFullYear()} FastLogix. All rights reserved.</p>
-    </div>
-  `
-});
+        from: `"FastLogix" <${SMTP_USER}>`,
+        to: sender.email,
+        subject: "Order Created - FastLogix",
+        html: `<p>Dear ${sender.name},</p><p>Your order has been created. You will receive your Order ID soon.</p>`
+      });
+    } catch (err) {
+      console.error('⚠️ Failed to send initial email to sender:', err && err.message ? err.message : err);
+    }
 
+    try {
+      await transporter.sendMail({
+        from: `"FastLogix" <${SMTP_USER}>`,
+        to: receiver.email,
+        subject: "Incoming Package - FastLogix",
+        html: `<p>Dear ${receiver.name},</p><p>A package has been created for you. Stay tuned for tracking details.</p>`
+      });
+    } catch (err) {
+      console.error('⚠️ Failed to send initial email to receiver:', err && err.message ? err.message : err);
+    }
 
-      console.log(`📧 Real Order ID emails sent to Sender & Receiver.`);
+    console.log(`📧 Initial emails attempted to Sender & Receiver.`);
+
+    // generate orderId after a delay and notify (wrapped in try/catch)
+    setTimeout(async () => {
+      try {
+        newOrder.orderId = `ORD-${Math.floor(Math.random() * 1000000)}`;
+        await newOrder.save();
+        console.log(`✅ Order ID generated: ${newOrder.orderId}`);
+
+        try {
+          await transporter.sendMail({
+            from: `"FastLogix" <${SMTP_USER}>`,
+            to: sender.email,
+            subject: `Your FastLogix Order ID: ${newOrder.orderId}`,
+            html: `
+              <div style="font-family: Arial, sans-serif; line-height: 1.6; color: #333; max-width: 600px; margin: auto; border: 1px solid #eee; padding: 20px;">
+                <h2 style="color: #1e88e5;">🚚 FastLogix Order Confirmation</h2>
+                <p>Hi ${sender.name},</p>
+                <p>We’re excited to inform you that your order has been successfully created and your <strong>Order ID</strong> is:</p>
+                <h3 style="color: #1e88e5;">${newOrder.orderId}</h3>
+                <p>You can track your order status anytime using the link below:</p>
+                <p style="text-align: center; margin: 20px 0;">
+                  <a href="https://www.fastlogix.org/track" style="background: #1e88e5; color: #fff; padding: 12px 20px; text-decoration: none; border-radius: 4px;">Track My Order</a>
+                </p>
+                <p>If you have any questions, feel free to contact our support team at <a href="mailto:${SMTP_USER}">${SMTP_USER}</a>.</p>
+                <p>Thank you for choosing FastLogix!</p>
+                <hr style="border: none; border-top: 1px solid #eee;" />
+                <p style="font-size: 12px; color: #888;">&copy; ${new Date().getFullYear()} FastLogix. All rights reserved.</p>
+              </div>
+            `
+          });
+        } catch (err) {
+          console.error('⚠️ Failed to send Order ID email to sender:', err && err.message ? err.message : err);
+        }
+
+        try {
+          await transporter.sendMail({
+            from: `"FastLogix" <${SMTP_USER}>`,
+            to: receiver.email,
+            subject: `Your FastLogix Package ID: ${newOrder.orderId}`,
+            html: `
+              <div style="font-family: Arial, sans-serif; line-height: 1.6; color: #333; max-width: 600px; margin: auto; border: 1px solid #eee; padding: 20px;">
+                <h2 style="color: #1e88e5;">📦 FastLogix Package Update</h2>
+                <p>Hi ${receiver.name},</p>
+                <p>A new package is on its way to you! Your <strong>Tracking ID</strong> is:</p>
+                <h3 style="color: #1e88e5;">${newOrder.orderId}</h3>
+                <p>You can check the delivery status anytime:</p>
+                <p style="text-align: center; margin: 20px 0;">
+                  <a href="https://www.fastlogix.org/track" style="background: #1e88e5; color: #fff; padding: 12px 20px; text-decoration: none; border-radius: 4px;">Track My Package</a>
+                </p>
+                <p>If you have questions, we’re here to help at <a href="mailto:${SMTP_USER}">${SMTP_USER}</a>.</p>
+                <p>Thank you for using FastLogix!</p>
+                <hr style="border: none; border-top: 1px solid #eee;" />
+                <p style="font-size: 12px; color: #888;">&copy; ${new Date().getFullYear()} FastLogix. All rights reserved.</p>
+              </div>
+            `
+          });
+        } catch (err) {
+          console.error('⚠️ Failed to send Order ID email to receiver:', err && err.message ? err.message : err);
+        }
+
+        console.log(`📧 Order ID emails attempted to Sender & Receiver.`);
+      } catch (err) {
+        console.error('⚠️ Failed during delayed Order ID generation / email sending:', err && err.message ? err.message : err);
+      }
     }, 30 * 1000);
 
-    res.json({ message: "Order created & saved to DB", order: newOrder });
+    // Return lightweight order (avoid sending Mongoose internals)
+    res.json({ message: "Order created & saved to DB", order: { id: newOrder._id, location: newOrder.location, status: newOrder.status } });
 
   } catch (error) {
-    console.error("Order creation error:", error);
+    // This will now include helpful geocode failure info (status/content-type/body snippet)
+    console.error("Order creation error:", error && error.message ? error.message : error);
     res.status(500).json({ message: "Failed to create order", error: error.message });
   }
 });
 
-// ✅ 5️⃣ Get one order by Mongo ID
+// ---------- 5️⃣ Get one order by Mongo ID
 app.get('/api/orders/:id', async (req, res) => {
   try {
     const order = await Order.findById(req.params.id);
     if (!order) return res.status(404).json({ message: "Order not found" });
     res.json(order);
   } catch (err) {
+    console.error('❌ Get order by ID error:', err && err.message ? err.message : err);
     res.status(500).json({ message: "Server error", err });
   }
 });
 
-// ✅ 6️⃣ Get all orders
+// ---------- 6️⃣ Get all orders
 app.get('/api/orders', async (req, res) => {
-  const orders = await Order.find();
-  res.json(orders);
+  try {
+    const orders = await Order.find();
+    res.json(orders);
+  } catch (err) {
+    console.error('❌ Get all orders error:', err && err.message ? err.message : err);
+    res.status(500).json({ message: 'Failed to fetch orders' });
+  }
 });
 
-// ✅ Update location + push to history
+// ---------- Update location + push to history
 app.patch('/api/orders/:orderId/location', async (req, res) => {
   const { orderId } = req.params;
-  const { location } = req.body;
+  const { location } = req.body; // expected to be address string
+
+  if (!location || typeof location !== 'string') {
+    return res.status(400).json({ message: 'Invalid location payload' });
+  }
 
   try {
     const geo = await geocodeAddress(location);
@@ -265,7 +350,7 @@ app.patch('/api/orders/:orderId/location', async (req, res) => {
     if (!order) return res.status(404).json({ message: "Order not found" });
 
     // Append previous location to history
-    if (order.location?.address && order.location?.coordinates?.length === 2) {
+    if (order.location?.address && Array.isArray(order.location?.coordinates) && order.location.coordinates.length === 2) {
       order.history = order.history || [];
       order.history.push({
         address: order.location.address,
@@ -284,64 +369,84 @@ app.patch('/api/orders/:orderId/location', async (req, res) => {
     res.json({ message: `Location updated for ${orderId}`, order });
 
   } catch (err) {
-    console.error(err);
+    console.error('⚠️ Update location error:', err && err.message ? err.message : err);
     res.status(500).json({ message: "Geocoding failed", error: err.message });
   }
 });
 
-
-// ✅ Enhanced Track endpoint
+// ---------- Enhanced Track endpoint
 app.get('/api/orders/track/:orderId', async (req, res) => {
   const { orderId } = req.params;
-  const order = await Order.findOne({ orderId });
-  if (!order) return res.status(404).json({ message: "Order not found" });
+  try {
+    const order = await Order.findOne({ orderId });
+    if (!order) return res.status(404).json({ message: "Order not found" });
 
-  res.json({
-    orderId: order.orderId,
-    status: order.status,
-    location: order.location,
-    history: order.history || [],
-    packageDetails: order.packageDetails,
-    sender: order.sender,
-    receiver: order.receiver
-  });
+    res.json({
+      orderId: order.orderId,
+      status: order.status,
+      location: order.location,
+      history: order.history || [],
+      packageDetails: order.packageDetails,
+      sender: order.sender,
+      receiver: order.receiver
+    });
+  } catch (err) {
+    console.error('❌ Track endpoint error:', err && err.message ? err.message : err);
+    res.status(500).json({ message: 'Failed to fetch order track info' });
+  }
 });
 
-
-// ✅ 9️⃣ Update status by OrderID
+// ---------- Update status by OrderID
 app.patch('/api/orders/:orderId/status', async (req, res) => {
   const { orderId } = req.params;
   const { status } = req.body;
 
-  const order = await Order.findOneAndUpdate({ orderId }, { status }, { new: true });
-  if (!order) return res.status(404).json({ message: "Order not found" });
+  try {
+    const order = await Order.findOneAndUpdate({ orderId }, { status }, { new: true });
+    if (!order) return res.status(404).json({ message: "Order not found" });
 
-  console.log(`✅ Status updated for ${orderId}: ${order.status}`);
-  res.json({ message: `Status updated for ${orderId}`, order });
+    console.log(`✅ Status updated for ${orderId}: ${order.status}`);
+    res.json({ message: `Status updated for ${orderId}`, order });
+  } catch (err) {
+    console.error('❌ Update status error:', err && err.message ? err.message : err);
+    res.status(500).json({ message: 'Failed to update status' });
+  }
 });
 
-// ✅ 10️⃣ Real-time Chat
+// ---------- Real-time Chat (Socket.IO)
 io.on('connection', (socket) => {
   console.log(`🔌 User connected: ${socket.id}`);
 
   socket.on('joinRoom', async (orderId) => {
-    socket.join(orderId);
-    console.log(`✅ ${socket.id} joined room ${orderId}`);
-    const messages = await ChatMessage.find({ orderId }).sort({ timestamp: 1 });
-    socket.emit('chatHistory', messages);
+    try {
+      socket.join(orderId);
+      console.log(`✅ ${socket.id} joined room ${orderId}`);
+      const messages = await ChatMessage.find({ orderId }).sort({ timestamp: 1 });
+      socket.emit('chatHistory', messages);
+    } catch (err) {
+      console.error('⚠️ joinRoom error:', err && err.message ? err.message : err);
+    }
   });
 
   socket.on('chatMessage', async ({ id, orderId, sender, message, timestamp, status }) => {
-    const newMsg = new ChatMessage({ id, orderId, sender, message, timestamp, status: status || 'sent' });
-    await newMsg.save();
-    io.to(orderId).emit('newMessage', { id, orderId, sender, message, timestamp, status: 'delivered' });
-    console.log(`💬 [${orderId}] ${sender}: ${message}`);
+    try {
+      const newMsg = new ChatMessage({ id, orderId, sender, message, timestamp, status: status || 'sent' });
+      await newMsg.save();
+      io.to(orderId).emit('newMessage', { id, orderId, sender, message, timestamp, status: 'delivered' });
+      console.log(`💬 [${orderId}] ${sender}: ${message}`);
+    } catch (err) {
+      console.error('⚠️ chatMessage save/send error:', err && err.message ? err.message : err);
+    }
   });
 
   socket.on('messageSeen', async ({ orderId, messageId }) => {
-    await ChatMessage.updateOne({ id: messageId }, { status: 'seen' });
-    io.to(orderId).emit('messageSeen', { messageId });
-    console.log(`👁 Message ${messageId} in ${orderId} marked as seen`);
+    try {
+      await ChatMessage.updateOne({ id: messageId }, { status: 'seen' });
+      io.to(orderId).emit('messageSeen', { messageId });
+      console.log(`👁 Message ${messageId} in ${orderId} marked as seen`);
+    } catch (err) {
+      console.error('⚠️ messageSeen error:', err && err.message ? err.message : err);
+    }
   });
 
   socket.on('disconnect', () => {
@@ -351,8 +456,13 @@ io.on('connection', (socket) => {
 
 app.get('/api/chat/:orderId', async (req, res) => {
   const { orderId } = req.params;
-  const messages = await ChatMessage.find({ orderId }).sort({ timestamp: 1 });
-  res.json({ messages });
+  try {
+    const messages = await ChatMessage.find({ orderId }).sort({ timestamp: 1 });
+    res.json({ messages });
+  } catch (err) {
+    console.error('❌ Get chat messages error:', err && err.message ? err.message : err);
+    res.status(500).json({ message: 'Failed to fetch chat messages' });
+  }
 });
 
 // Get unique active chats (one per orderId)
@@ -367,17 +477,17 @@ app.get('/api/chats/active', async (req, res) => {
     // Merge: [{ orderId, customer }]
     const activeChats = orders.map(order => ({
       orderId: order.orderId,
-      customer: order.sender.name || 'Unknown'
+      customer: (order.sender && order.sender.name) ? order.sender.name : 'Unknown'
     }));
 
     res.json(activeChats);
   } catch (err) {
-    console.error(err);
+    console.error('❌ Get active chats error:', err && err.message ? err.message : err);
     res.status(500).json({ message: 'Failed to get active chats' });
   }
 });
 
-// ✅ Start server
+// ---------- Start server
 const PORT = process.env.PORT || 5000;
 
 server.listen(PORT, '0.0.0.0', () => {
