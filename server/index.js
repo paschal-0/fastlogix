@@ -1,34 +1,37 @@
+// server.js (ZeptoMail hard-coded token)
+// NOTE: Do NOT commit this file with hard-coded credentials to a public repo.
+
 import express from 'express';
 import http from 'http';
 import { Server } from 'socket.io';
 import bcrypt from 'bcryptjs';
 import jwt from 'jsonwebtoken';
-import nodemailer from 'nodemailer';
 import mongoose from 'mongoose';
-import fetch from 'node-fetch'; // ✅ For geocoding
+import fetch from 'node-fetch'; // For geocoding
 import cors from 'cors';
+import { SendMailClient } from 'zeptomail';
 
-// ✅ Create Express
+// ---------- Create Express
 const app = express();
 app.use(express.json());
 
-// ✅ Allowed origins
+// ---------- Allowed origins
 const allowedOrigins = [
   'https://www.fastlogix.org',
   'http://localhost:3000'
 ];
 
-// ✅ CORS for HTTP
+// ---------- CORS for HTTP
 app.use(cors({
   origin: allowedOrigins,
   methods: ['GET', 'POST', 'PATCH', 'DELETE', 'PUT'],
   credentials: true
 }));
 
-// ✅ Create HTTP server AFTER app
+// ---------- Create HTTP server AFTER app
 const server = http.createServer(app);
 
-// ✅ Attach Socket.IO AFTER server
+// ---------- Attach Socket.IO AFTER server
 const io = new Server(server, {
   cors: {
     origin: allowedOrigins,
@@ -39,22 +42,26 @@ const io = new Server(server, {
 
 // ---------- Environment / config (use env vars; fallbacks included)
 const MONGO_URI = process.env.MONGO_URI || 'mongodb+srv://paschalokafor450:NvM6LAKinAYYZ3hu@fastlogix.cacgj8m.mongodb.net/fastlogix';
-const SMTP_USER = process.env.SMTP_USER || 'support@fastlogix.org';
-const SMTP_PASS = process.env.SMTP_PASS || 'srKPyRC2Z1Yk';
 const SECRET_KEY = process.env.SECRET_KEY || 'mysecretkey';
 const GEOCODER_USER_AGENT = process.env.GEOCODER_USER_AGENT || 'FastLogix/1.0 (support@fastlogix.org)';
 
-// Warn if using fallback values (helpful for Render logs)
+// ---------- HARD-CODED ZeptoMail credentials (as you requested)
+// Mail Agent Alias: 507a5e15d0a45248
+// Send Mail token 1 (Zoho-enczapikey ... ) — hard-coded here for quick testing:
+const ZEPTO_TOKEN = 'Zoho-enczapikey wSsVR613/ELzD/wsymGsdeYxkVUHUlz2HE0pjVOgunP8TPnD8sc9whKdAQTyTqAZRGZuHWBDo7h8nE1V1WUP3t4vn14JXSiF9mqRe1U4J3x17qnvhDzOWWRVkBCIJYoPxAxvm2BoF8sl+g==';
+const EMAIL_FROM = 'FastLogix <noreply@fastlogix.org>';
+const ZEPTO_API_HOST = 'api.zeptomail.com'; // informational, not used directly
+
+// Warn if using fallback values (helpful for logs)
 if (!process.env.MONGO_URI) console.warn('⚠️ Using fallback MONGO_URI. Set MONGO_URI in environment for production.');
-if (!process.env.SMTP_USER || !process.env.SMTP_PASS) console.warn('⚠️ Using fallback SMTP credentials. Set SMTP_USER and SMTP_PASS in environment.');
 if (!process.env.SECRET_KEY) console.warn('⚠️ Using fallback SECRET_KEY. Set SECRET_KEY in environment for production.');
 
 // ---------- Mongo connection
-mongoose.connect(MONGO_URI)
+mongoose.connect(MONGO_URI, { autoIndex: true })
   .then(() => console.log('✅ MongoDB connected to fastlogix DB'))
   .catch(err => console.error('❌ MongoDB connection error:', err));
 
-// ---------- Helper: Robust Geocode function (Nominatim-compatible, defensive)
+// ---------- Helper: Robust Geocode function (Nominatim-compatible)
 async function geocodeAddress(address) {
   if (!address || typeof address !== 'string') {
     throw new Error('Invalid address passed to geocodeAddress');
@@ -65,29 +72,23 @@ async function geocodeAddress(address) {
   const res = await fetch(url, {
     method: 'GET',
     headers: {
-      // Nominatim requires a valid User-Agent with contact info
       'User-Agent': GEOCODER_USER_AGENT,
       'Accept': 'application/json'
     },
-    // you may set redirect: 'manual' if you want to detect redirects
   });
 
   const contentType = res.headers.get('content-type') || '';
   const textBody = await res.text();
 
-  // Helpful debugging logs (Render logs)
   console.error('🔎 Geocode response status:', res.status, res.statusText);
   console.error('🔎 Geocode content-type:', contentType);
-  // Log a limited snippet to avoid massive logs
   console.error('🔎 Geocode response body (first 1000 chars):', textBody.slice(0, 1000));
 
   if (!res.ok) {
-    // Include a short snippet of the body so the cause (HTML error page, Cloudflare block, etc.) is visible in logs
     throw new Error(`Geocode API HTTP ${res.status}: ${res.statusText}. Body: ${textBody.slice(0, 500)}`);
   }
 
   if (!contentType.includes('application/json')) {
-    // Defensive: do not attempt to JSON.parse HTML
     throw new Error(`Expected JSON from geocode API but got content-type: ${contentType}. Body: ${textBody.slice(0,500)}`);
   }
 
@@ -170,25 +171,80 @@ app.get('/', (req, res) => {
   res.send("Welcome to FastLogix backend!");
 });
 
-// ---------- Configure Nodemailer (Zoho SMTP) using env vars
-const transporter = nodemailer.createTransport({
-  host: 'smtp.zoho.com',
-  port: 465,          // secure port for Zoho
-  secure: true,       // use TLS
-  auth: {
-    user: SMTP_USER,
-    pass: SMTP_PASS
+// ---------- ZeptoMail client & helper (using hard-coded token)
+let zeptoClient = null;
+try {
+  zeptoClient = new SendMailClient({
+    url: `https://api.zeptomail.com`,
+    token: ZEPTO_TOKEN
+  });
+  console.log('✅ ZeptoMail client configured (token hard-coded)');
+} catch (err) {
+  console.error('⚠️ Failed to initialize ZeptoMail client:', err && err.message ? err.message : err);
+}
+
+/**
+ * sendEmail - sends email via ZeptoMail API
+ * @param {Object} opts
+ * @param {string} opts.to - recipient email
+ * @param {string} [opts.toName] - recipient display name
+ * @param {string} opts.subject
+ * @param {string} opts.html
+ * @param {string} [opts.from]
+ */
+async function sendEmail({ to, toName = "", subject, html, from }) {
+  if (!zeptoClient) {
+    const err = new Error('ZeptoMail client not configured');
+    console.error('❌ sendEmail error:', err.message);
+    throw err;
+  }
+
+  const fromAddr = from || EMAIL_FROM;
+  const fromAddressOnly = (fromAddr.includes("<") ? fromAddr.match(/<(.*)>/)[1] : fromAddr);
+  const fromName = (fromAddr.includes("<") ? fromAddr.split("<")[0].trim() : undefined);
+
+  const payload = {
+    from: {
+      address: fromAddressOnly,
+      name: fromName
+    },
+    to: [
+      { email_address: { address: to, name: toName || undefined } }
+    ],
+    subject,
+    htmlbody: html
+  };
+
+  try {
+    const result = await zeptoClient.sendMail(payload);
+    console.log('📧 ZeptoMail send success:', result && result.message ? result.message : 'ok', 'to=', to);
+    return result;
+  } catch (err) {
+    console.error('⚠️ ZeptoMail send failed:', err && (err.message || err.toString()) ? (err.message || err.toString()) : err);
+    throw err;
+  }
+}
+
+// ---------- Test email endpoint
+app.get('/api/test-email', async (req, res) => {
+  const to = req.query.to || '';
+  if (!to) return res.status(400).json({ message: 'Provide ?to=you@domain.com' });
+
+  try {
+    await sendEmail({
+      to,
+      toName: 'Test Recipient',
+      subject: 'FastLogix test email',
+      html: '<p>This is a test from FastLogix via ZeptoMail.</p>'
+    });
+    res.json({ ok: true, message: 'Test email sent' });
+  } catch (err) {
+    console.error('Test email error:', err && err.message ? err.message : err);
+    res.status(500).json({ ok: false, error: err && err.message ? err.message : String(err) });
   }
 });
 
-// verify transporter at startup (non-blocking)
-transporter.verify().then(() => {
-  console.log('✅ SMTP transporter verified');
-}).catch(err => {
-  console.error('⚠️ SMTP transporter verification failed:', err && err.message ? err.message : err);
-});
-
-// ---------- 4️⃣ Create Order (with geocoding) - improved error handling
+// ---------- Create Order (with geocoding)
 app.post('/api/orders', async (req, res) => {
   const { sender, receiver, packageDetails } = req.body;
 
@@ -200,10 +256,14 @@ app.post('/api/orders', async (req, res) => {
     // geocode receiver address (defensive)
     const geo = await geocodeAddress(receiver.address);
 
+    // Generate orderId immediately so client can use it right away
+    const orderId = `ORD-${Date.now().toString().slice(-6)}-${Math.floor(Math.random() * 9000 + 1000)}`;
+
     const newOrder = new Order({
       sender,
       receiver,
       packageDetails,
+      orderId,
       location: {
         address: receiver.address,
         coordinates: [geo.lon, geo.lat]
@@ -212,101 +272,57 @@ app.post('/api/orders', async (req, res) => {
 
     await newOrder.save();
 
-    // send initial emails; wrap sends to avoid crashes if SMTP fails
-    try {
-      await transporter.sendMail({
-        from: `"FastLogix" <${SMTP_USER}>`,
-        to: sender.email,
-        subject: "Order Created - FastLogix",
-        html: `<p>Dear ${sender.name},</p><p>Your order has been created. You will receive your Order ID soon.</p>`
-      });
-    } catch (err) {
-      console.error('⚠️ Failed to send initial email to sender:', err && err.message ? err.message : err);
-    }
+    console.log(`✅ Order created with orderId: ${newOrder.orderId} (_id=${newOrder._id})`);
 
-    try {
-      await transporter.sendMail({
-        from: `"FastLogix" <${SMTP_USER}>`,
-        to: receiver.email,
-        subject: "Incoming Package - FastLogix",
-        html: `<p>Dear ${receiver.name},</p><p>A package has been created for you. Stay tuned for tracking details.</p>`
-      });
-    } catch (err) {
-      console.error('⚠️ Failed to send initial email to receiver:', err && err.message ? err.message : err);
-    }
+    // Prepare email payloads
+    const from = EMAIL_FROM;
+    const senderHtml = `<p>Dear ${sender.name},</p><p>Your order has been created. Order ID: <strong>${orderId}</strong></p>`;
+    const receiverHtml = `<p>Dear ${receiver.name},</p><p>A package has been created for you. Tracking ID: <strong>${orderId}</strong></p>`;
 
-    console.log(`📧 Initial emails attempted to Sender & Receiver.`);
-
-    // generate orderId after a delay and notify (wrapped in try/catch)
-    setTimeout(async () => {
+    // Send emails asynchronously - don't block the response
+    (async () => {
       try {
-        newOrder.orderId = `ORD-${Math.floor(Math.random() * 1000000)}`;
-        await newOrder.save();
-        console.log(`✅ Order ID generated: ${newOrder.orderId}`);
-
-        try {
-          await transporter.sendMail({
-            from: `"FastLogix" <${SMTP_USER}>`,
-            to: sender.email,
-            subject: `Your FastLogix Order ID: ${newOrder.orderId}`,
-            html: `
-              <div style="font-family: Arial, sans-serif; line-height: 1.6; color: #333; max-width: 600px; margin: auto; border: 1px solid #eee; padding: 20px;">
-                <h2 style="color: #1e88e5;">🚚 FastLogix Order Confirmation</h2>
-                <p>Hi ${sender.name},</p>
-                <p>We’re excited to inform you that your order has been successfully created and your <strong>Order ID</strong> is:</p>
-                <h3 style="color: #1e88e5;">${newOrder.orderId}</h3>
-                <p>You can track your order status anytime using the link below:</p>
-                <p style="text-align: center; margin: 20px 0;">
-                  <a href="https://www.fastlogix.org/track" style="background: #1e88e5; color: #fff; padding: 12px 20px; text-decoration: none; border-radius: 4px;">Track My Order</a>
-                </p>
-                <p>If you have any questions, feel free to contact our support team at <a href="mailto:${SMTP_USER}">${SMTP_USER}</a>.</p>
-                <p>Thank you for choosing FastLogix!</p>
-                <hr style="border: none; border-top: 1px solid #eee;" />
-                <p style="font-size: 12px; color: #888;">&copy; ${new Date().getFullYear()} FastLogix. All rights reserved.</p>
-              </div>
-            `
-          });
-        } catch (err) {
-          console.error('⚠️ Failed to send Order ID email to sender:', err && err.message ? err.message : err);
-        }
-
-        try {
-          await transporter.sendMail({
-            from: `"FastLogix" <${SMTP_USER}>`,
-            to: receiver.email,
-            subject: `Your FastLogix Package ID: ${newOrder.orderId}`,
-            html: `
-              <div style="font-family: Arial, sans-serif; line-height: 1.6; color: #333; max-width: 600px; margin: auto; border: 1px solid #eee; padding: 20px;">
-                <h2 style="color: #1e88e5;">📦 FastLogix Package Update</h2>
-                <p>Hi ${receiver.name},</p>
-                <p>A new package is on its way to you! Your <strong>Tracking ID</strong> is:</p>
-                <h3 style="color: #1e88e5;">${newOrder.orderId}</h3>
-                <p>You can check the delivery status anytime:</p>
-                <p style="text-align: center; margin: 20px 0;">
-                  <a href="https://www.fastlogix.org/track" style="background: #1e88e5; color: #fff; padding: 12px 20px; text-decoration: none; border-radius: 4px;">Track My Package</a>
-                </p>
-                <p>If you have questions, we’re here to help at <a href="mailto:${SMTP_USER}">${SMTP_USER}</a>.</p>
-                <p>Thank you for using FastLogix!</p>
-                <hr style="border: none; border-top: 1px solid #eee;" />
-                <p style="font-size: 12px; color: #888;">&copy; ${new Date().getFullYear()} FastLogix. All rights reserved.</p>
-              </div>
-            `
-          });
-        } catch (err) {
-          console.error('⚠️ Failed to send Order ID email to receiver:', err && err.message ? err.message : err);
-        }
-
-        console.log(`📧 Order ID emails attempted to Sender & Receiver.`);
+        await sendEmail({ from, to: sender.email, toName: sender.name, subject: "Order Created - FastLogix", html: senderHtml });
       } catch (err) {
-        console.error('⚠️ Failed during delayed Order ID generation / email sending:', err && err.message ? err.message : err);
+        console.error('⚠️ Failed to send initial email to sender (zepto):', err && err.message ? err.message : err);
       }
-    }, 30 * 1000);
 
-    // Return lightweight order (avoid sending Mongoose internals)
-    res.json({ message: "Order created & saved to DB", order: { id: newOrder._id, location: newOrder.location, status: newOrder.status } });
+      try {
+        await sendEmail({ from, to: receiver.email, toName: receiver.name, subject: "Incoming Package - FastLogix", html: receiverHtml });
+      } catch (err) {
+        console.error('⚠️ Failed to send initial email to receiver (zepto):', err && err.message ? err.message : err);
+      }
+
+      // Order ID fancy email
+      const orderHtml = `
+        <div style="font-family: Arial, sans-serif; line-height: 1.6; color: #333; max-width: 600px; margin: auto; border: 1px solid #eee; padding: 20px;">
+          <h2 style="color: #1e88e5;">🚚 FastLogix Order Confirmation</h2>
+          <p>Hi ${sender.name},</p>
+          <p>Your <strong>Order ID</strong> is <strong>${orderId}</strong>.</p>
+          <p>Track: https://www.fastlogix.org/track</p>
+          <hr style="border: none; border-top: 1px solid #eee;" />
+          <p style="font-size: 12px; color: #888;">&copy; ${new Date().getFullYear()} FastLogix</p>
+        </div>
+      `;
+      try {
+        await sendEmail({ from, to: sender.email, toName: sender.name, subject: `Your FastLogix Order ID: ${orderId}`, html: orderHtml });
+      } catch (err) {
+        console.error('⚠️ Failed to send Order ID email (zepto):', err && err.message ? err.message : err);
+      }
+    })();
+
+    // Return immediate response with orderId and DB id
+    res.json({
+      message: "Order created & saved to DB",
+      order: {
+        id: newOrder._id,
+        orderId: newOrder.orderId,
+        location: newOrder.location,
+        status: newOrder.status
+      }
+    });
 
   } catch (error) {
-    // This will now include helpful geocode failure info (status/content-type/body snippet)
     console.error("Order creation error:", error && error.message ? error.message : error);
     res.status(500).json({ message: "Failed to create order", error: error.message });
   }
@@ -486,6 +502,10 @@ app.get('/api/chats/active', async (req, res) => {
     res.status(500).json({ message: 'Failed to get active chats' });
   }
 });
+
+// health/readiness endpoints for monitoring
+app.get('/healthz', (req, res) => res.send('ok'));
+app.get('/readyz', (req, res) => res.json({ mongo: mongoose.connection.readyState }));
 
 // ---------- Start server
 const PORT = process.env.PORT || 5000;

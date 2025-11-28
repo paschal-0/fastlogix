@@ -14,7 +14,8 @@
     "mongoose": "^8.15.2",
     "node-fetch": "^3.3.2",
     "nodemailer": "^7.0.3",
-    "socket.io": "^4.8.1"
+    "socket.io": "^4.8.1",
+    "zeptomail": "^7.0.0"
   },
   "devDependencies": {
     "nodemon": "^2.0.22"
