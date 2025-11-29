@@ -1,4 +1,4 @@
-// server.js (ZeptoMail hard-coded token)
+// server.js (ZeptoMail via fetch; hard-coded token usage)
 // NOTE: Do NOT commit this file with hard-coded credentials to a public repo.
 
 import express from 'express';
@@ -7,9 +7,8 @@ import { Server } from 'socket.io';
 import bcrypt from 'bcryptjs';
 import jwt from 'jsonwebtoken';
 import mongoose from 'mongoose';
-import fetch from 'node-fetch'; // For geocoding
+import fetch from 'node-fetch'; // For geocoding and ZeptoMail HTTP calls
 import cors from 'cors';
-import { SendMailClient } from 'zeptomail';
 
 // ---------- Create Express
 const app = express();
@@ -46,15 +45,14 @@ const SECRET_KEY = process.env.SECRET_KEY || 'mysecretkey';
 const GEOCODER_USER_AGENT = process.env.GEOCODER_USER_AGENT || 'FastLogix/1.0 (support@fastlogix.org)';
 
 // ---------- HARD-CODED ZeptoMail credentials (as you requested)
-// Mail Agent Alias: 507a5e15d0a45248
-// Send Mail token 1 (Zoho-enczapikey ... ) — hard-coded here for quick testing:
+// Send Mail token (include prefix if that's how Zepto shows it)
 const ZEPTO_TOKEN = 'Zoho-enczapikey wSsVR613/ELzD/wsymGsdeYxkVUHUlz2HE0pjVOgunP8TPnD8sc9whKdAQTyTqAZRGZuHWBDo7h8nE1V1WUP3t4vn14JXSiF9mqRe1U4J3x17qnvhDzOWWRVkBCIJYoPxAxvm2BoF8sl+g==';
 const EMAIL_FROM = 'FastLogix <noreply@fastlogix.org>';
-const ZEPTO_API_HOST = 'api.zeptomail.com'; // informational, not used directly
+const ZEPTO_API_ENDPOINT = 'https://api.zeptomail.com/v1.1/email';
 
-// Warn if using fallback values (helpful for logs)
 if (!process.env.MONGO_URI) console.warn('⚠️ Using fallback MONGO_URI. Set MONGO_URI in environment for production.');
 if (!process.env.SECRET_KEY) console.warn('⚠️ Using fallback SECRET_KEY. Set SECRET_KEY in environment for production.');
+if (!ZEPTO_TOKEN) console.warn('⚠️ ZeptoMail token missing. Emails will fail.');
 
 // ---------- Mongo connection
 mongoose.connect(MONGO_URI, { autoIndex: true })
@@ -115,7 +113,7 @@ const orderSchema = new mongoose.Schema({
   receiver: { name: String, email: String, address: String },
   packageDetails: Object,
   status: { type: String, default: "Pending" },
-  orderId: String,
+  orderId: { type: String, index: true },
   location: {
     address: String,
     coordinates: { type: [Number], index: '2dsphere' } // [lon, lat]
@@ -171,32 +169,10 @@ app.get('/', (req, res) => {
   res.send("Welcome to FastLogix backend!");
 });
 
-// ---------- ZeptoMail client & helper (using hard-coded token)
-let zeptoClient = null;
-try {
-  zeptoClient = new SendMailClient({
-    url: `https://api.zeptomail.com`,
-    token: ZEPTO_TOKEN
-  });
-  console.log('✅ ZeptoMail client configured (token hard-coded)');
-} catch (err) {
-  console.error('⚠️ Failed to initialize ZeptoMail client:', err && err.message ? err.message : err);
-}
-
-/**
- * sendEmail - sends email via ZeptoMail API
- * @param {Object} opts
- * @param {string} opts.to - recipient email
- * @param {string} [opts.toName] - recipient display name
- * @param {string} opts.subject
- * @param {string} opts.html
- * @param {string} [opts.from]
- */
+// ---------- sendEmail using direct ZeptoMail REST API (fetch)
 async function sendEmail({ to, toName = "", subject, html, from }) {
-  if (!zeptoClient) {
-    const err = new Error('ZeptoMail client not configured');
-    console.error('❌ sendEmail error:', err.message);
-    throw err;
+  if (!ZEPTO_TOKEN) {
+    throw new Error('ZeptoMail token not configured');
   }
 
   const fromAddr = from || EMAIL_FROM;
@@ -215,14 +191,43 @@ async function sendEmail({ to, toName = "", subject, html, from }) {
     htmlbody: html
   };
 
+  let resp;
+  let text;
   try {
-    const result = await zeptoClient.sendMail(payload);
-    console.log('📧 ZeptoMail send success:', result && result.message ? result.message : 'ok', 'to=', to);
-    return result;
+    resp = await fetch(ZEPTO_API_ENDPOINT, {
+      method: 'POST',
+      headers: {
+        'Accept': 'application/json',
+        'Content-Type': 'application/json',
+        // ZeptoMail expects an Authorization header — include token exactly as provided by Zepto
+        'Authorization': ZEPTO_TOKEN
+      },
+      body: JSON.stringify(payload),
+      // timeout isn't built-in here; node-fetch v2 supports AbortController if you want to add timeouts
+    });
+
+    text = await resp.text();
   } catch (err) {
-    console.error('⚠️ ZeptoMail send failed:', err && (err.message || err.toString()) ? (err.message || err.toString()) : err);
-    throw err;
+    console.error('⚠️ ZeptoMail HTTP request failed:', err && err.message ? err.message : err);
+    throw new Error(`ZeptoMail HTTP request failed: ${err && err.message ? err.message : String(err)}`);
   }
+
+  // Try parse JSON body for better error messages
+  let data;
+  try {
+    data = JSON.parse(text);
+  } catch (e) {
+    data = text;
+  }
+
+  if (!resp.ok) {
+    console.error('⚠️ ZeptoMail API returned non-OK:', resp.status, resp.statusText, data);
+    throw new Error(`ZeptoMail API error ${resp.status}: ${JSON.stringify(data)}`);
+  }
+
+  // success
+  console.log('📧 ZeptoMail send success:', data);
+  return data;
 }
 
 // ---------- Test email endpoint
@@ -513,3 +518,5 @@ const PORT = process.env.PORT || 5000;
 server.listen(PORT, '0.0.0.0', () => {
   console.log(`🚀 Server with Socket.io & MongoDB running on port ${PORT}`);
 });
+
+  
