@@ -49,6 +49,7 @@ const GEOCODER_USER_AGENT = process.env.GEOCODER_USER_AGENT || 'FastLogix/1.0 (s
 const ZEPTO_TOKEN = 'Zoho-enczapikey wSsVR613/ELzD/wsymGsdeYxkVUHUlz2HE0pjVOgunP8TPnD8sc9whKdAQTyTqAZRGZuHWBDo7h8nE1V1WUP3t4vn14JXSiF9mqRe1U4J3x17qnvhDzOWWRVkBCIJYoPxAxvm2BoF8sl+g==';
 const EMAIL_FROM = 'FastLogix <noreply@fastlogix.org>';
 const ZEPTO_API_ENDPOINT = 'https://api.zeptomail.com/v1.1/email';
+const TRACKING_SITE_BASE = 'https://www.fastlogix.org/track'; // used in email links
 
 if (!process.env.MONGO_URI) console.warn('⚠️ Using fallback MONGO_URI. Set MONGO_URI in environment for production.');
 if (!process.env.SECRET_KEY) console.warn('⚠️ Using fallback SECRET_KEY. Set SECRET_KEY in environment for production.');
@@ -202,8 +203,7 @@ async function sendEmail({ to, toName = "", subject, html, from }) {
         // ZeptoMail expects an Authorization header — include token exactly as provided by Zepto
         'Authorization': ZEPTO_TOKEN
       },
-      body: JSON.stringify(payload),
-      // timeout isn't built-in here; node-fetch v2 supports AbortController if you want to add timeouts
+      body: JSON.stringify(payload)
     });
 
     text = await resp.text();
@@ -250,6 +250,7 @@ app.get('/api/test-email', async (req, res) => {
 });
 
 // ---------- Create Order (with geocoding)
+// Receiver now gets tracking link; initial location is pushed into history so tracking shows history.
 app.post('/api/orders', async (req, res) => {
   const { sender, receiver, packageDetails } = req.body;
 
@@ -264,6 +265,12 @@ app.post('/api/orders', async (req, res) => {
     // Generate orderId immediately so client can use it right away
     const orderId = `ORD-${Date.now().toString().slice(-6)}-${Math.floor(Math.random() * 9000 + 1000)}`;
 
+    const initialLocation = {
+      address: receiver.address,
+      coordinates: [geo.lon, geo.lat],
+      timestamp: new Date()
+    };
+
     const newOrder = new Order({
       sender,
       receiver,
@@ -272,17 +279,29 @@ app.post('/api/orders', async (req, res) => {
       location: {
         address: receiver.address,
         coordinates: [geo.lon, geo.lat]
-      }
+      },
+      history: [initialLocation]
     });
 
     await newOrder.save();
 
     console.log(`✅ Order created with orderId: ${newOrder.orderId} (_id=${newOrder._id})`);
 
-    // Prepare email payloads
+    // Prepare email payloads with tracking link (both sender & receiver)
     const from = EMAIL_FROM;
-    const senderHtml = `<p>Dear ${sender.name},</p><p>Your order has been created. Order ID: <strong>${orderId}</strong></p>`;
-    const receiverHtml = `<p>Dear ${receiver.name},</p><p>A package has been created for you. Tracking ID: <strong>${orderId}</strong></p>`;
+    const trackLink = `${TRACKING_SITE_BASE}?orderId=${encodeURIComponent(orderId)}`;
+
+    const senderHtml = `
+      <p>Dear ${sender.name},</p>
+      <p>Your order has been created. Order ID: <strong>${orderId}</strong></p>
+      <p>You can track the package here: <a href="${trackLink}">${trackLink}</a></p>
+    `;
+
+    const receiverHtml = `
+      <p>Dear ${receiver.name},</p>
+      <p>A package has been created for you. Tracking ID: <strong>${orderId}</strong></p>
+      <p>Track your package here: <a href="${trackLink}">${trackLink}</a></p>
+    `;
 
     // Send emails asynchronously - don't block the response
     (async () => {
@@ -298,21 +317,29 @@ app.post('/api/orders', async (req, res) => {
         console.error('⚠️ Failed to send initial email to receiver (zepto):', err && err.message ? err.message : err);
       }
 
-      // Order ID fancy email
+      // Order ID fancy email (send to both sender and receiver)
       const orderHtml = `
         <div style="font-family: Arial, sans-serif; line-height: 1.6; color: #333; max-width: 600px; margin: auto; border: 1px solid #eee; padding: 20px;">
           <h2 style="color: #1e88e5;">🚚 FastLogix Order Confirmation</h2>
           <p>Hi ${sender.name},</p>
           <p>Your <strong>Order ID</strong> is <strong>${orderId}</strong>.</p>
-          <p>Track: https://www.fastlogix.org/track</p>
+          <p>Track: <a href="${trackLink}">${trackLink}</a></p>
           <hr style="border: none; border-top: 1px solid #eee;" />
           <p style="font-size: 12px; color: #888;">&copy; ${new Date().getFullYear()} FastLogix</p>
         </div>
       `;
+
       try {
         await sendEmail({ from, to: sender.email, toName: sender.name, subject: `Your FastLogix Order ID: ${orderId}`, html: orderHtml });
       } catch (err) {
-        console.error('⚠️ Failed to send Order ID email (zepto):', err && err.message ? err.message : err);
+        console.error('⚠️ Failed to send Order ID email to sender (zepto):', err && err.message ? err.message : err);
+      }
+
+      try {
+        // Send the same fancy confirmation to receiver (so they have link & ID)
+        await sendEmail({ from, to: receiver.email, toName: receiver.name, subject: `FastLogix Package ID: ${orderId}`, html: orderHtml });
+      } catch (err) {
+        console.error('⚠️ Failed to send Order ID email to receiver (zepto):', err && err.message ? err.message : err);
       }
     })();
 
@@ -323,6 +350,7 @@ app.post('/api/orders', async (req, res) => {
         id: newOrder._id,
         orderId: newOrder.orderId,
         location: newOrder.location,
+        history: newOrder.history || [],
         status: newOrder.status
       }
     });
@@ -370,7 +398,7 @@ app.patch('/api/orders/:orderId/location', async (req, res) => {
     const order = await Order.findOne({ orderId });
     if (!order) return res.status(404).json({ message: "Order not found" });
 
-    // Append previous location to history
+    // Append previous location to history if there is a valid existing location
     if (order.location?.address && Array.isArray(order.location?.coordinates) && order.location.coordinates.length === 2) {
       order.history = order.history || [];
       order.history.push({
@@ -518,5 +546,3 @@ const PORT = process.env.PORT || 5000;
 server.listen(PORT, '0.0.0.0', () => {
   console.log(`🚀 Server with Socket.io & MongoDB running on port ${PORT}`);
 });
-
-  
